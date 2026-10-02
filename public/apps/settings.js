@@ -14,6 +14,7 @@ const SECTIONS = [
   { id: 'network', label: 'Rede', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>' },
   { id: 'battery', label: 'Bateria', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="10" x2="23" y2="14"/></svg>' },
   { id: 'disk', label: 'Armazenamento', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' },
+  { id: 'git', label: 'Git', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="12" r="3"/><line x1="6" y1="9" x2="6" y2="15"/><path d="M6 9a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v0"/></svg>' },
   { id: 'about', label: 'Sobre', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' }
 ];
 
@@ -53,6 +54,7 @@ function cleanup() { st = null; }
 
 async function showSection(id) {
   if (!st) return;
+  if (id === 'git') return renderGit();
   if (id !== 'appearance') {
     try {
       const r = await fetch('/api/system');
@@ -261,4 +263,79 @@ function formatUptime(s) {
   parts.push(m + 'm');
   return parts.join(' ');
 }
+
+async function renderGit() {
+  let cfg = { user: '', email: '', hasToken: false };
+  try {
+    const r = await fetch('/api/git/config');
+    cfg = await r.json();
+  } catch {}
+
+  st.pane.innerHTML = `
+    <div class="stg-title">Git</div>
+    <div class="stg-card">
+      <div class="stg-row"><span class="stg-label">Nome (user.name)</span></div>
+      <input class="code-git-msg" id="gitName" placeholder="Seu Nome" value="${esc(cfg.user)}">
+      <div class="stg-row" style="margin-top:10px"><span class="stg-label">Email (user.email)</span></div>
+      <input class="code-git-msg" id="gitEmail" placeholder="voce@exemplo.com" value="${esc(cfg.email)}">
+      <div class="stg-row" style="margin-top:10px"><span class="stg-label">Token do GitHub</span>
+        <span class="stg-badge ${cfg.hasToken ? 'g' : 'y'}">${cfg.hasToken ? 'Configurado' : 'Não configurado'}</span>
+      </div>
+      <input class="code-git-msg" id="gitToken" type="password"
+             placeholder="${cfg.hasToken ? 'Deixe vazio para manter o atual' : 'ghp_…  (cole aqui)'}">
+      <p style="font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.5">
+        Crie um token em <b>github.com/settings/tokens</b> → <b>Generate new token (classic)</b> → marque <b>repo</b>.<br>
+        Cole aqui. O token fica salvo só no seu Termux (<code>~/.flowos/config.json</code>).
+      </p>
+      <div class="stg-row" style="margin-top:14px">
+        <button class="editor-btn primary" id="gitSave">Salvar</button>
+        <button class="editor-btn" id="gitClear" style="color:var(--red)">Apagar token</button>
+      </div>
+    </div>
+    <div class="stg-card">
+      <div class="stg-label" style="margin-bottom:10px">Atalhos do editor</div>
+      <div class="stg-row"><span class="stg-label">Salvar</span><span class="stg-value">Ctrl + S</span></div>
+      <div class="stg-row"><span class="stg-label">Fechar aba</span><span class="stg-value">Ctrl + W</span></div>
+      <div class="stg-row"><span class="stg-label">Buscar arquivo</span><span class="stg-value">Ctrl + P</span></div>
+    </div>`;
+
+  st.pane.querySelector('#gitSave').onclick = async () => {
+    const body = {
+      user:  st.pane.querySelector('#gitName').value.trim(),
+      email: st.pane.querySelector('#gitEmail').value.trim()
+    };
+    const tok = st.pane.querySelector('#gitToken').value.trim();
+    if (tok) body.token = tok;
+    await fetch('/api/git/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    renderGit();
+  };
+
+  st.pane.querySelector('#gitClear').onclick = async () => {
+    if (!confirm('Apagar token salvo?')) return;
+    await fetch('/api/git/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: '' })
+    });
+    renderGit();
+  };
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+window.Settings = { showGit: () => {
+  // used by Code app to jump straight to the Git section
+  const items = document.querySelectorAll('.stg-nav-item');
+  items.forEach(el => el.classList.toggle('active', el.dataset.id === 'git'));
+  renderGit();
+}};
+  
 })();
