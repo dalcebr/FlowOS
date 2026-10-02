@@ -339,6 +339,344 @@ app.post('/api/processes/kill', auth, (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
+/* ══════════════════════════════════════════════════════
+   Config persistente + Git + Upload
+   ══════════════════════════════════════════════════════ */
+const CONFIG_DIR = path.join(HOME, '.flowos');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+const ASKPASS_FILE = path.join(CONFIG_DIR, 'askpass.sh');
+
+function loadConfig() {
+  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
+}
+function saveConfig(c) {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(c, null, 2));
+  try { fs.chmodSync(CONFIG_FILE, 0o600); } catch {}
+}
+function ensureAskpass() {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  const sh = `#!/bin/sh
+case "$1" in
+  *Username*) echo "$GIT_USER" ;;
+  *Password*) echo "$GIT_TOKEN" ;;
+  *) echo "" ;;
+esac
+`;
+  fs.writeFileSync(ASKPASS_FILE, sh);
+  try { fs.chmodSync(ASKPASS_FILE, 0o755); } catch {}
+}
+ensureAskpass();
+
+/* ─── Git runner ─── */
+function gitRun(cwd, args, opts = {}) {
+  return new Promise((resolve) => {
+    const env = {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: ASKPASS_FILE,
+      GIT_USER: opts.user || 'x-access-token',
+      GIT_TOKEN: opts.token || ''
+    };
+    let child;
+    try { child = spawn('git', args, { cwd, env }); }
+    catch (e) { return resolve({ ok: false, code: -1, stdout: '', stderr: e.message }); }
+    let stdout = '', stderr = '';
+    child.stdout.on('data', d => stdout += d.toString());
+    child.stderr.on('data', d => stderr += d.toString());
+    child.on('close', code => resolve({ ok: code === 0, code, stdout, stderr }));
+    child.on('error', e => resolve({ ok: false, code: -1, stdout: '', stderr: e.message }));
+  });
+}
+
+/* ─── Git config ─── */
+app.get('/api/git/config', auth, (req, res) => {
+  const c = loadConfig();
+  res.json({
+    user: c.gitUser || '',
+    email: c.gitEmail || '',
+    hasToken: !!c.gitToken,
+    tokenHint: c.gitToken ? c.gitToken.slice(0, 4) + '…' : null
+  });
+});
+app.post('/api/git/config', auth, (req, res) => {
+  const c = loadConfig();
+  if (typeof req.body.user === 'string') c.gitUser = req.body.user.trim();
+  if (typeof req.body.email === 'string') c.gitEmail = req.body.email.trim();
+  if (typeof req.body.token === 'string') {
+    if (req.body.token === '') delete c.gitToken;
+    else c.gitToken = req.body.token.trim();
+  }
+  saveConfig(c);
+  res.json({ ok: true });
+});
+
+/* ─── Git status/log/remotes ─── */
+app.get('/api/git/status', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.query.path);
+    const r = await gitRun(cwd, ['status', '--porcelain=v1', '-b']);
+    if (!r.ok) return res.status(400).json({ error: r.stderr || 'não é um repositório Git' });
+    const lines = r.stdout.split('\n').filter(Boolean);
+    let branch = '', ahead = 0, behind = 0;
+    const files = [];
+    for (const line of lines) {
+      if (line.startsWith('## ')) {
+        const head = line.slice(3);
+        branch = head.split('...')[0].replace(/^No commits yet on /, '').trim();
+        const m1 = head.match(/ahead (\d+)/);
+        const m2 = head.match(/behind (\d+)/);
+        if (m1) ahead = parseInt(m1[1], 10);
+        if (m2) behind = parseInt(m2[1], 10);
+        continue;
+      }
+      const code = line.slice(0, 2);
+      const file = line.slice(3).trim();
+      files.push({ status: code, file, staged: code[0] !== ' ' && code[0] !== '?' });
+    }
+    res.json({ branch, ahead, behind, files, clean: files.length === 0 });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.get('/api/git/log', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.query.path);
+    const n = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const r = await gitRun(cwd, ['log', `-${n}`, '--pretty=format:%H%x09%h%x09%an%x09%ar%x09%s']);
+    if (!r.ok) return res.json({ commits: [] });
+    const commits = r.stdout.split('\n').filter(Boolean).map(l => {
+      const [hash, short, author, rel, ...rest] = l.split('\t');
+      return { hash, short, author, rel, msg: rest.join('\t') };
+    });
+    res.json({ commits });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.get('/api/git/remotes', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.query.path);
+    const r = await gitRun(cwd, ['remote', '-v']);
+    if (!r.ok) return res.json({ remotes: [] });
+    const map = {};
+    for (const line of r.stdout.split('\n')) {
+      const m = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+      if (m && !map[m[1]]) map[m[1]] = { name: m[1], url: m[2] };
+    }
+    res.json({ remotes: Object.values(map) });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+/* ─── Git ações ─── */
+app.post('/api/git/clone', auth, async (req, res) => {
+  try {
+    const url = (req.body.url || '').trim();
+    const destParent = resolve(req.body.dest);
+    if (!url || !destParent) return res.status(400).json({ error: 'url e dest obrigatórios' });
+    const dirName = (req.body.name || path.basename(url).replace(/\.git$/, '')).trim();
+    if (!dirName) return res.status(400).json({ error: 'nome do diretório inválido' });
+    const target = path.join(destParent, dirName);
+    if (fs.existsSync(target)) return res.status(400).json({ error: 'destino já existe: ' + target });
+    await fsp.mkdir(destParent, { recursive: true });
+    const c = loadConfig();
+    const r = await gitRun(destParent, ['clone', url, dirName], {
+      user: c.gitUser || 'x-access-token',
+      token: c.gitToken || ''
+    });
+    if (!r.ok) return res.status(400).json({ error: (r.stderr || r.stdout || 'erro no clone').trim() });
+    res.json({ ok: true, path: target });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/git/init', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.body.path);
+    let r = await gitRun(cwd, ['init', '-b', 'main']);
+    if (!r.ok) r = await gitRun(cwd, ['init']);
+    if (!r.ok) return res.status(400).json({ error: r.stderr });
+    const c = loadConfig();
+    if (c.gitUser)  await gitRun(cwd, ['config', 'user.name',  c.gitUser]);
+    if (c.gitEmail) await gitRun(cwd, ['config', 'user.email', c.gitEmail]);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/git/add', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.body.path);
+    const files = Array.isArray(req.body.files) && req.body.files.length ? req.body.files : ['.'];
+    const r = await gitRun(cwd, ['add', ...files]);
+    if (!r.ok) return res.status(400).json({ error: r.stderr });
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/git/unstage', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.body.path);
+    const files = Array.isArray(req.body.files) && req.body.files.length ? req.body.files : ['.'];
+    const r = await gitRun(cwd, ['reset', 'HEAD', '--', ...files]);
+    if (!r.ok) {
+      // fallback for initial commit
+      const r2 = await gitRun(cwd, ['rm', '--cached', '-r', '--', ...files]);
+      if (!r2.ok) return res.status(400).json({ error: r.stderr });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/git/commit', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.body.path);
+    const message = (req.body.message || '').trim();
+    if (!message) return res.status(400).json({ error: 'mensagem obrigatória' });
+    const c = loadConfig();
+    const args = ['commit', '-m', message];
+    if (c.gitUser)  args.unshift('-c', `user.name=${c.gitUser}`);
+    if (c.gitEmail) args.unshift('-c', `user.email=${c.gitEmail}`);
+    const r = await gitRun(cwd, args);
+    if (!r.ok) {
+      const both = (r.stdout + r.stderr).toLowerCase();
+      if (both.includes('nothing to commit')) return res.status(400).json({ error: 'nada para commitar' });
+      if (both.includes('please tell me who you are') || both.includes('user.email')) {
+        return res.status(400).json({ error: 'configure seu nome e email do Git nos ajustes' });
+      }
+      return res.status(400).json({ error: (r.stderr || r.stdout).trim() });
+    }
+    res.json({ ok: true, output: r.stdout });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/git/push', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.body.path);
+    const c = loadConfig();
+    if (!c.gitToken) return res.status(400).json({ error: 'configure o token do GitHub nos ajustes do Git' });
+    const args = ['push'];
+    if (req.body.remote) args.push(req.body.remote);
+    if (req.body.branch) args.push(req.body.branch);
+    // if no upstream, set it
+    if (req.body.setUpstream) args.splice(1, 0, '-u');
+    const r = await gitRun(cwd, args, { user: c.gitUser || 'x-access-token', token: c.gitToken });
+    if (!r.ok) return res.status(400).json({ error: (r.stderr || r.stdout).trim() });
+    res.json({ ok: true, output: r.stderr });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/git/pull', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.body.path);
+    const c = loadConfig();
+    const r = await gitRun(cwd, ['pull'], { user: c.gitUser || 'x-access-token', token: c.gitToken });
+    if (!r.ok) return res.status(400).json({ error: (r.stderr || r.stdout).trim() });
+    res.json({ ok: true, output: r.stdout + r.stderr });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/git/remote', auth, async (req, res) => {
+  try {
+    const cwd = resolve(req.body.path);
+    const name = (req.body.name || 'origin').trim();
+    const url = (req.body.url || '').trim();
+    if (!url) return res.status(400).json({ error: 'URL obrigatória' });
+    let r = await gitRun(cwd, ['remote', 'add', name, url]);
+    if (!r.ok) r = await gitRun(cwd, ['remote', 'set-url', name, url]);
+    if (!r.ok) return res.status(400).json({ error: r.stderr });
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+/* ─── File tree (recursivo) ─── */
+app.get('/api/files/tree', auth, async (req, res) => {
+  try {
+    const root = resolve(req.query.path);
+    const maxDepth = Math.min(parseInt(req.query.depth, 10) || 6, 8);
+    const ignore = new Set(['.git', 'node_modules', '.cache', '__pycache__', 'dist', 'build',
+      '.next', '.venv', 'venv', 'target', '.idea', '.vscode', '.gradle', 'vendor']);
+
+    async function walk(dir, depth) {
+      if (depth > maxDepth) return [];
+      let entries;
+      try { entries = await fsp.readdir(dir, { withFileTypes: true }); }
+      catch { return []; }
+      const out = [];
+      for (const e of entries) {
+        if (ignore.has(e.name)) continue;
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          out.push({ name: e.name, type: 'dir', path: full, children: await walk(full, depth + 1) });
+        } else if (e.isFile()) {
+          out.push({ name: e.name, type: 'file', path: full, ext: path.extname(e.name).slice(1).toLowerCase() });
+        }
+      }
+      out.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+        return a.name.localeCompare(b.name, undefined, { numeric: true });
+      });
+      return out;
+    }
+
+    res.json({ root, tree: await walk(root, 0) });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+/* ─── Upload de zip / tar ─── */
+app.post('/api/files/upload', auth, async (req, res) => {
+  const dest = req.body?.dest;
+  const name = (req.body?.name || 'upload.zip').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const data = req.body?.data;
+  if (!dest) return res.status(400).json({ error: 'destino obrigatório' });
+  if (!data) return res.status(400).json({ error: 'nenhum arquivo recebido' });
+
+  const targetDir = resolve(dest);
+  const tmp = path.join(os.tmpdir(), `flowos-upload-${Date.now()}-${name}`);
+
+  try {
+    const buf = Buffer.from(data, 'base64');
+    fs.writeFileSync(tmp, buf);
+    await fsp.mkdir(targetDir, { recursive: true });
+
+    const lower = name.toLowerCase();
+    let cmd = null;
+    if (lower.endsWith('.zip')) cmd = `unzip -o "${tmp}" -d "${targetDir}"`;
+    else if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) cmd = `tar -xzf "${tmp}" -C "${targetDir}"`;
+    else if (lower.endsWith('.tar')) cmd = `tar -xf "${tmp}" -C "${targetDir}"`;
+    else {
+      // single file — just copy
+      const dst = path.join(targetDir, name);
+      fs.copyFileSync(tmp, dst);
+      try { fs.unlinkSync(tmp); } catch {}
+      return res.json({ ok: true, path: dst });
+    }
+
+    const out = await new Promise((resolve) => {
+      exec(cmd, { timeout: 60000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) =>
+        resolve({ err, stdout: stdout || '', stderr: stderr || '' }));
+    });
+
+    try { fs.unlinkSync(tmp); } catch {}
+
+    if (out.err && out.err.code === 127) {
+      return res.status(400).json({
+        error: 'unzip não instalado. Rode no Termux: pkg install unzip -y'
+      });
+    }
+    if (out.err && !out.stdout && !out.stderr) {
+      return res.status(400).json({ error: out.err.message });
+    }
+
+    const contents = await fsp.readdir(targetDir).catch(() => []);
+    res.json({
+      ok: true,
+      path: targetDir,
+      contents,
+      log: (out.stdout + out.stderr).slice(-2000)
+    });
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch {}
+    res.status(400).json({ error: e.message });
+  }
+});
+
 /* ─── Static ─── */
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
