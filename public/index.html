@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+  <title>FlowOS</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+
+  <!-- ═══════ LOCK SCREEN ═══════ -->
+  <div id="lockScreen" class="layer">
+    <div class="lock-bg"></div>
+    <div class="lock-clock" id="lockClock">
+      <span id="lockTime" class="lock-time">00:00</span>
+      <span id="lockDate" class="lock-date">segunda-feira, 1 de janeiro</span>
+    </div>
+    <div class="lock-panel" id="lockPanel">
+      <div class="lock-avatar" id="lockAvatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="8" r="4.5"/><path d="M3.5 21.5v-.5a8.5 8.5 0 0 1 17 0v.5"/></svg>
+      </div>
+      <p class="lock-username" id="lockUser">FlowOS</p>
+      <div class="lock-field">
+        <input id="loginPwd" type="password" placeholder="Senha" autocomplete="off" spellcheck="false">
+        <button id="loginBtn" aria-label="Entrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+      <p id="loginErr" class="lock-err"></p>
+    </div>
+    <button class="lock-hint" id="lockHint">Clique ou pressione qualquer tecla</button>
+  </div>
+
+  <!-- ═══════ DESKTOP ═══════ -->
+  <div id="desktop" class="layer gone">
+    <div class="desk-bg"></div>
+    <div id="winLayer" class="win-layer"></div>
+
+    <!-- Taskbar -->
+    <div class="tb">
+      <button id="tbStart" class="tb-start" aria-label="Iniciar">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>
+      </button>
+      <div class="tb-apps" id="tbApps"></div>
+      <div class="tb-tray">
+        <div class="tb-metrics">
+          <span class="tb-m"><span class="tb-m-label">CPU</span><span id="cpuVal">--%</span></span>
+          <span class="tb-m"><span class="tb-m-label">RAM</span><span id="ramVal">--%</span></span>
+        </div>
+        <div class="tb-sep"></div>
+        <div class="tb-icons">
+          <svg class="tb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+          <svg class="tb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          <svg class="tb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="16" height="10" rx="1.5"/><line x1="22" y1="11" x2="22" y2="13"/><rect x="4" y="9" width="9" height="6" rx=".5" fill="currentColor" opacity=".25"/></svg>
+        </div>
+        <div class="tb-sep"></div>
+        <div class="tb-clock">
+          <span id="tbTime">00:00</span>
+          <span id="tbDate">01/01/2026</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Menu -->
+    <div id="startMenu" class="sm gone">
+      <div class="sm-head">
+        <div class="sm-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16.65" y1="16.65" x2="22" y2="22"/></svg>
+          <input type="text" placeholder="Pesquisar" disabled>
+        </div>
+      </div>
+      <p class="sm-label">Fixados</p>
+      <div class="sm-grid" id="smGrid"></div>
+      <div class="sm-foot">
+        <div class="sm-user">
+          <div class="sm-user-avatar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-.5a7 7 0 0 1 14 0v.5"/></svg>
+          </div>
+          <span id="smUser">FlowOS</span>
+        </div>
+        <button id="smLogout" class="sm-logout" title="Desligar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script src="apps/terminal.js"></script>
+  <script src="apps/files.js"></script>
+  <script src="apps/settings.js"></script>
+</body>
+</html>
