@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a12">
+<title>FlowOS</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="screen">
+  <div class="wallpaper"></div>
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <div class="login-logo">⚡</div>
+    <h1>FlowOS</h1>
+    <p class="login-sub">Seu computador de bolso</p>
+    <input type="password" id="loginPass" placeholder="Senha" autocomplete="current-password">
+    <button type="submit">Entrar</button>
+    <p class="login-error" id="loginError"></p>
+  </form>
+</div>
+
+<!-- DESKTOP -->
+<div id="desktop" class="screen hidden">
+  <div class="wallpaper" id="wallpaper"></div>
+
+  <div class="menubar">
+    <div class="mb-left">
+      <span class="mb-logo">⚡</span>
+      <span class="mb-title" id="mbTitle">FlowOS</span>
+    </div>
+    <div class="mb-right">
+      <span class="mb-stat" id="mbCpu">CPU —</span>
+      <span class="mb-stat" id="mbRam">RAM —</span>
+      <span class="mb-stat mb-clock" id="mbClock">--:--</span>
+    </div>
+  </div>
+
+  <div class="windows" id="windows"></div>
+  <div class="dock" id="dock"></div>
+</div>
+
+<script src="script.js"></script>
+<script src="apps/terminal.js"></script>
+<script src="apps/files.js"></script>
+<script src="apps/editor.js"></script>
+<script src="apps/processes.js"></script>
+<script src="apps/settings.js"></script>
+</body>
+</html>
