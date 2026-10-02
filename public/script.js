@@ -1,234 +1,156 @@
-/*══════════════════════════════════════════════
-  FlowOS — Core (script.js)
-  Lock screen · Auth · Window Manager · Clock · Metrics
-  Exposes: window.WM, window.OS
-══════════════════════════════════════════════*/
+/*══════════════════════════════════════════
+  FlowOS v3 — Core
+  macOS-style: menubar, dock, traffic lights
+  Theme persistence via localStorage
+══════════════════════════════════════════*/
 (function(){
 'use strict';
-var $=function(s){return document.querySelector(s)};
+var $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 
-/* ═══ OS namespace ═══ */
 window.OS={user:'FlowOS',home:null};
 
-/* ═══ SVG Icons ═══ */
+/* ═══ ICONS ═══ */
 var I={
   term:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
-  files:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-  cfg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
-  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+  files:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+  editor:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+  cfg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
 };
 
-/* ═══ LOCK SCREEN ═══ */
-var lockActive=true, lockShown=true;
-var lockClock=$('#lockClock'),lockPanel=$('#lockPanel'),lockHint=$('#lockHint');
-var loginPwd=$('#loginPwd'),loginBtn=$('#loginBtn'),loginErr=$('#loginErr'),lockField=$('.lock-field');
-
-var dayNames=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
-var monthNames=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-
-function updateLockClock(){
-  var n=new Date();
-  $('#lockTime').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
-  $('#lockDate').textContent=dayNames[n.getDay()]+', '+n.getDate()+' de '+monthNames[n.getMonth()];
-}
-
-function revealLogin(){
-  if(!lockShown) return;
-  lockShown=false;
-  lockClock.classList.add('up');
-  lockHint.classList.add('hide');
-  lockPanel.classList.add('show');
-  setTimeout(function(){loginPwd.focus()},400);
-}
-
-// Click clock or press key → reveal login
-lockClock.addEventListener('click',revealLogin);
-document.addEventListener('keydown',function(e){
-  if(!lockActive) return;
-  if(lockShown && e.key!=='Escape'){revealLogin();return}
-  if(e.key==='Enter' && !lockShown) login();
-});
-
-loginBtn.addEventListener('click',login);
-
-async function login(){
-  var pwd=loginPwd.value;if(!pwd)return;
-  loginBtn.disabled=true;
-  try{
-    var r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
-    if(r.ok){var d=await r.json();OS.user=d.user||'FlowOS';enterDesktop()}
-    else{showErr('Senha incorreta')}
-  }catch(_){showErr('Sem conexão')}
-  loginBtn.disabled=false;
-}
-
-function showErr(m){
-  loginErr.textContent=m;loginErr.classList.add('show');
-  lockField.classList.add('shake');
-  setTimeout(function(){lockField.classList.remove('shake')},500);
-  setTimeout(function(){loginErr.classList.remove('show')},2500);
-}
-
-async function checkSession(){
-  try{
-    var r=await fetch('/api/whoami');
-    if(r.ok){var d=await r.json();OS.user=d.user||'FlowOS';enterDesktop()}
-  }catch(_){}
-}
-
-function enterDesktop(){
-  lockActive=false;
-  $('#lockScreen').classList.add('fade-out');
-  setTimeout(function(){
-    $('#lockScreen').classList.add('gone');$('#lockScreen').classList.remove('fade-out');
-    $('#desktop').classList.remove('gone');$('#desktop').classList.add('fade-in');
-    setUserLabels();
-    setTimeout(function(){$('#desktop').classList.remove('fade-in')},400);
-  },300);
-}
-
-function returnToLock(){
-  for(var id in WM._inst) WM.close(id);
-  closeSM();
-  $('#desktop').classList.add('fade-out');
-  setTimeout(function(){
-    $('#desktop').classList.add('gone');$('#desktop').classList.remove('fade-out');
-    var ls=$('#lockScreen');ls.classList.remove('gone');ls.classList.add('fade-in');
-    lockActive=true;lockShown=true;
-    lockClock.classList.remove('up');lockPanel.classList.remove('show');lockHint.classList.remove('hide');
-    loginPwd.value='';
-    setTimeout(function(){ls.classList.remove('fade-in')},400);
-  },300);
-}
-
-function setUserLabels(){
-  $('#lockUser').textContent=OS.user;
-  $('#smUser').textContent=OS.user;
-  var av=$('#lockAvatar');
-  // Build initials
-  var init=OS.user.charAt(0).toUpperCase();
-  if(init && init!=='F'){
-    av.innerHTML='<span style="font-size:32px;font-weight:500;color:var(--tx2)">'+init+'</span>';
+/* ═══ PREFS (localStorage) ═══ */
+window.Prefs={
+  _d:{theme:'dark',accentH:215,wallIdx:0},
+  get:function(k){try{var s=localStorage.getItem('flowos_prefs');var o=s?JSON.parse(s):{}; return o[k]!==undefined?o[k]:this._d[k]}catch(_){return this._d[k]}},
+  set:function(k,v){try{var s=localStorage.getItem('flowos_prefs');var o=s?JSON.parse(s):{};o[k]=v;localStorage.setItem('flowos_prefs',JSON.stringify(o))}catch(_){}},
+  apply:function(){
+    var t=this.get('theme');document.documentElement.setAttribute('data-theme',t);
+    document.documentElement.style.setProperty('--accentH',this.get('accentH'));
+    var walls=['linear-gradient(135deg,#1a0533,#0c1a3a 40%,#0a2e1f)','linear-gradient(135deg,#0f2027,#203a43,#2c5364)','linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)','linear-gradient(135deg,#2d1b69,#11998e)','linear-gradient(135deg,#141e30,#243b55)','linear-gradient(135deg,#0c0c1d,#1a1a2e,#2d132c)'];
+    var w=walls[this.get('wallIdx')]||walls[0];
+    document.documentElement.style.setProperty('--wall',w);
   }
+};
+Prefs.apply();
+
+/* ═══ LOCK ═══ */
+var lockOn=true,clockUp=true;
+var days=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+var months=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+var mShort=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+function lkTick(){var n=new Date();$('#lkTime').textContent=pad(n.getHours())+':'+pad(n.getMinutes());$('#lkDate').textContent=days[n.getDay()]+', '+n.getDate()+' de '+months[n.getMonth()]}
+
+function reveal(){if(!clockUp)return;clockUp=false;$('#lkClock').classList.add('up');$('#lkHint').classList.add('hide');$('#lkLogin').classList.add('show');setTimeout(()=>$('#lkPwd').focus(),400)}
+
+$('#lkClock').onclick=reveal;
+document.addEventListener('keydown',e=>{if(!lockOn)return;if(clockUp){reveal();return};if(e.key==='Enter')doLogin()});
+$('#lkBtn').onclick=doLogin;
+
+async function doLogin(){
+  var p=$('#lkPwd').value;if(!p)return;
+  try{var r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});
+    if(r.ok){var d=await r.json();OS.user=d.user||'FlowOS';enter()}
+    else{$('#lkErr').textContent='Senha incorreta';$('#lkErr').classList.add('show');$('.lk-field').classList.add('shake');setTimeout(()=>$('.lk-field').classList.remove('shake'),450);setTimeout(()=>$('#lkErr').classList.remove('show'),2500)}
+  }catch(_){$('#lkErr').textContent='Sem conexão';$('#lkErr').classList.add('show')}
 }
+
+async function checkSess(){try{var r=await fetch('/api/whoami');if(r.ok){var d=await r.json();OS.user=d.user||'FlowOS';enter()}}catch(_){}}
+
+function enter(){
+  lockOn=false;$('#lock').classList.add('fade-out');
+  setTimeout(()=>{$('#lock').classList.add('gone');$('#lock').classList.remove('fade-out');$('#desk').classList.remove('gone');$('#desk').classList.add('fade-in');setUser();setTimeout(()=>$('#desk').classList.remove('fade-in'),400)},300);
+}
+
+function toLock(){
+  for(var id in WM._inst)WM.close(id);
+  $('#desk').classList.add('fade-out');
+  setTimeout(()=>{$('#desk').classList.add('gone');$('#desk').classList.remove('fade-out');
+    var l=$('#lock');l.classList.remove('gone');l.classList.add('fade-in');
+    lockOn=true;clockUp=true;$('#lkClock').classList.remove('up');$('#lkLogin').classList.remove('show');$('#lkHint').classList.remove('hide');$('#lkPwd').value='';
+    setTimeout(()=>l.classList.remove('fade-in'),400)},300);
+}
+
+function setUser(){$('#lkUser').textContent=OS.user;$('#lkAvatar').textContent=OS.user.charAt(0).toUpperCase()}
 
 /* ═══ WINDOW MANAGER ═══ */
-var WM=window.WM={
-  _apps:{},_inst:{},_z:700,
-  register:function(id,d){this._apps[id]=d},
-  open:function(id){
-    closeSM();
-    if(this._inst[id]){this.focus(id);var w=this._inst[id];if(w.min){w.min=false;w.el.style.display=''}return}
-    var d=this._apps[id];if(!d)return;this._mk(id,d)},
+var WM=window.WM={_apps:{},_inst:{},_z:800,
+  register(id,d){this._apps[id]=d},
+  open(id){if(this._inst[id]){this.focus(id);var w=this._inst[id];if(w.min){w.min=false;w.el.style.display=''}return}var d=this._apps[id];if(d)this._mk(id,d)},
 
-  _mk:function(id,d){
-    var L=$('#winLayer'),el=document.createElement('div');
-    el.className='win opening';el.dataset.app=id;
-    var vw=L.clientWidth,vh=L.clientHeight;
-    var w=Math.min(d.width||680,vw-12),h=Math.min(d.height||460,vh-12);
-    el.style.width=w+'px';el.style.height=h+'px';
-    el.style.left=Math.max(6,(vw-w)/2)+'px';el.style.top=Math.max(6,(vh-h)/2)+'px';
-
-    // Title bar
+  _mk(id,d){
+    var L=$('#winLayer'),el=document.createElement('div');el.className='win opening';el.dataset.app=id;
+    var vw=L.clientWidth,vh=L.clientHeight,w=Math.min(d.width||700,vw-20),h=Math.min(d.height||470,vh-20);
+    el.style.cssText=`width:${w}px;height:${h}px;left:${Math.max(10,(vw-w)/2)}px;top:${Math.max(10,(vh-h)/2)}px`;
     var bar=document.createElement('div');bar.className='win-bar';
-    bar.innerHTML='<div class="win-bar-ico">'+( d.icon||'')+'</div><span class="win-bar-title">'+(d.title||id)+'</span>'+
-      '<button class="win-btn min" title="Minimizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>'+
-      '<button class="win-btn max" title="Maximizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>'+
-      '<button class="win-btn close" title="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="17" y1="7" x2="7" y2="17"/><line x1="7" y1="7" x2="17" y2="17"/></svg></button>';
+    bar.innerHTML=`<div class="win-dots"><button class="win-dot close"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3" stroke-linecap="round"><line x1="7" y1="7" x2="17" y2="17"/><line x1="17" y1="7" x2="7" y2="17"/></svg></button><button class="win-dot min"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3"><line x1="6" y1="12" x2="18" y2="12"/></svg></button><button class="win-dot max"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="3"><polyline points="8 4 16 12 8 20"/></svg></button></div><span class="win-title">${d.title||id}</span><div class="win-bar-pad"></div>`;
     var body=document.createElement('div');body.className='win-body';
     el.appendChild(bar);el.appendChild(body);L.appendChild(el);
 
-    var inst={el:el,body:body,def:d,min:false};
-    this._inst[id]=inst;this.focus(id);this._addTB(id,d);this._drag(el,bar);
+    var inst={el,body,def:d,min:false};this._inst[id]=inst;this.focus(id);
+    this._dockDot(id,true);this._drag(el,bar);
 
-    bar.querySelector('.close').onclick=function(){WM.close(id)};
-    bar.querySelector('.max').onclick=function(){el.classList.toggle('max')};
-    bar.querySelector('.min').onclick=function(){inst.min=true;el.style.display='none';WM._focusTop()};
-    el.addEventListener('pointerdown',function(){WM.focus(id)});
-    setTimeout(function(){el.classList.remove('opening')},260);
-    if(d.onOpen) d.onOpen(body,inst);
+    bar.querySelector('.close').onclick=()=>WM.close(id);
+    bar.querySelector('.max').onclick=()=>el.classList.toggle('max');
+    bar.querySelector('.min').onclick=()=>{inst.min=true;el.style.display='none';WM._focusTop()};
+    el.addEventListener('pointerdown',()=>WM.focus(id));
+    setTimeout(()=>el.classList.remove('opening'),300);
+    $('#mbApp').textContent=d.title||id;
+    if(d.onOpen)d.onOpen(body,inst);
   },
 
-  close:function(id){
-    var i=this._inst[id];if(!i)return;
-    if(i.def.onClose) i.def.onClose();
-    i.el.classList.add('closing');var s=this;
-    setTimeout(function(){i.el.remove();delete s._inst[id];s._rmTB(id);s._focusTop()},160);
-  },
+  close(id){var i=this._inst[id];if(!i)return;if(i.def.onClose)i.def.onClose();
+    i.el.classList.add('closing');setTimeout(()=>{i.el.remove();delete this._inst[id];this._dockDot(id,false);this._focusTop()},200)},
 
-  focus:function(id){
-    this._z++;var i=this._inst[id];if(i)i.el.style.zIndex=this._z;
-    var bs=document.querySelectorAll('.tb-app');
-    for(var j=0;j<bs.length;j++) bs[j].classList.toggle('on',bs[j].dataset.app===id);
-  },
+  focus(id){this._z++;var i=this._inst[id];if(i){i.el.style.zIndex=this._z;$('#mbApp').textContent=i.def.title||id}},
 
-  _focusTop:function(){
-    var top=null,tz=0;
-    for(var id in this._inst){var i=this._inst[id];if(!i.min){var z=+i.el.style.zIndex||0;if(z>=tz){tz=z;top=id}}}
-    if(top)this.focus(top);
-  },
+  _focusTop(){var top=null,tz=0;for(var id in this._inst){var i=this._inst[id];if(!i.min){var z=+i.el.style.zIndex||0;if(z>=tz){tz=z;top=id}}}
+    if(top)this.focus(top);else $('#mbApp').textContent='FlowOS'},
 
-  _addTB:function(id,d){
-    var b=document.createElement('button');b.className='tb-app on';b.dataset.app=id;
-    b.innerHTML=(d.icon||'')+'<span>'+(d.title||id)+'</span>';
-    b.onclick=function(){WM.open(id)};$('#tbApps').appendChild(b);
-  },
-  _rmTB:function(id){var b=document.querySelector('.tb-app[data-app="'+id+'"]');if(b)b.remove()},
+  _dockDot(id,on){var d=document.querySelector(`.dock-icon[data-app="${id}"]`);if(d)d.classList.toggle('running',on)},
 
-  _drag:function(el,bar){
-    var ox,oy,on=false;
-    bar.addEventListener('pointerdown',function(e){
-      if(e.target.closest('.win-btn')||el.classList.contains('max'))return;
-      on=true;var r=el.getBoundingClientRect();ox=e.clientX-r.left;oy=e.clientY-r.top;
-      bar.classList.add('dragging');e.preventDefault()});
-    document.addEventListener('pointermove',function(e){if(!on)return;
-      el.style.left=Math.max(0,e.clientX-ox)+'px';el.style.top=Math.max(0,e.clientY-oy)+'px'});
-    document.addEventListener('pointerup',function(){on=false;bar.classList.remove('dragging')});
-  }
+  _drag(el,bar){var ox,oy,on=false;
+    bar.addEventListener('pointerdown',e=>{if(e.target.closest('.win-dot')||el.classList.contains('max'))return;on=true;var r=el.getBoundingClientRect();ox=e.clientX-r.left;oy=e.clientY-r.top;bar.classList.add('dragging');e.preventDefault()});
+    document.addEventListener('pointermove',e=>{if(!on)return;el.style.left=Math.max(0,e.clientX-ox)+'px';el.style.top=Math.max(0,e.clientY-oy)+'px'});
+    document.addEventListener('pointerup',()=>{on=false;bar.classList.remove('dragging')})}
 };
 
-/* ═══ START MENU ═══ */
-var smOpen=false;
-var appList=[
+/* ═══ DOCK ═══ */
+var dockApps=[
   {id:'terminal',name:'Terminal',icon:I.term},
   {id:'files',name:'Arquivos',icon:I.files},
-  {id:'settings',name:'Configurações',icon:I.cfg},
-  {id:'editor',name:'Editor',icon:I.edit}
+  {id:'editor',name:'Editor',icon:I.editor},
+  {id:'_sep'},
+  {id:'settings',name:'Ajustes',icon:I.cfg}
 ];
-
-(function buildGrid(){
-  var g=$('#smGrid'),f=document.createDocumentFragment();
-  appList.forEach(function(a){
-    var t=document.createElement('div');t.className='sm-tile';
-    t.innerHTML='<div class="sm-tile-ico">'+a.icon+'</div><span class="sm-tile-name">'+a.name+'</span>';
-    t.onclick=function(){WM._apps[a.id]?WM.open(a.id):alert(a.name+' — em breve')};
-    f.appendChild(t);
+(function buildDock(){
+  var d=$('#dockInner'),f=document.createDocumentFragment();
+  dockApps.forEach(a=>{
+    if(a.id==='_sep'){var s=document.createElement('div');s.className='dock-sep';f.appendChild(s);return}
+    var b=document.createElement('button');b.className='dock-icon';b.dataset.app=a.id;
+    b.innerHTML=a.icon+'<div class="dock-dot"></div><div class="dock-tooltip">'+a.name+'</div>';
+    b.onclick=()=>{if(WM._apps[a.id])WM.open(a.id);else alert(a.name+' — em breve')};
+    f.appendChild(b);
   });
-  g.appendChild(f);
+  d.appendChild(f);
 })();
 
-function openSM(){var m=$('#startMenu');m.classList.remove('gone','exit');m.classList.add('enter');smOpen=true}
-function closeSM(){if(!smOpen)return;var m=$('#startMenu');m.classList.remove('enter');m.classList.add('exit');smOpen=false;setTimeout(function(){if(!smOpen)m.classList.add('gone')},200)}
-
-$('#tbStart').addEventListener('click',function(e){e.stopPropagation();smOpen?closeSM():openSM()});
-$('#startMenu').addEventListener('click',function(e){e.stopPropagation()});
-$('#smLogout').addEventListener('click',function(){fetch('/api/logout',{method:'POST'});returnToLock()});
-document.addEventListener('click',function(e){if(smOpen&&!e.target.closest('.sm')&&!e.target.closest('.tb-start'))closeSM()});
-
-/* ═══ TASKBAR CLOCK + METRICS ═══ */
-function tbTick(){
-  var n=new Date();
-  $('#tbTime').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
-  $('#tbDate').textContent=String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear();
+/* ═══ MENUBAR CLOCK + METRICS ═══ */
+function mbTick(){
+  var n=new Date();$('#mbClock').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
+  var wd=['dom','seg','ter','qua','qui','sex','sáb'];
+  $('#mbDate').textContent=wd[n.getDay()]+'. '+n.getDate()+' '+mShort[n.getMonth()]+'.';
 }
-async function tbMetrics(){
-  try{var r=await fetch('/api/metrics');if(!r.ok)return;var d=await r.json();
-    $('#cpuVal').textContent=d.cpu+'%';$('#ramVal').textContent=d.mem+'%'}catch(_){}
-}
+async function mbMet(){try{var r=await fetch('/api/metrics');if(!r.ok)return;var d=await r.json();
+  $('#mbCpu').textContent='CPU '+d.cpu+'%';$('#mbRam').textContent='RAM '+d.mem+'%'}catch(_){}}
+
+function pad(n){return String(n).padStart(2,'0')}
 
 /* ═══ INIT ═══ */
-updateLockClock();setInterval(updateLockClock,1000);
-tbTick();setInterval(tbTick,1000);
-tbMetrics();setInterval(tbMetrics,3000);
-checkSession();
+lkTick();setInterval(lkTick,1000);
+mbTick();setInterval(mbTick,1000);
+mbMet();setInterval(mbMet,3000);
+checkSess();
+
+/* expose for apps */
+window._toLock=toLock;
 })();
