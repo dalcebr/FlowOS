@@ -171,10 +171,10 @@ function openItem(it) {
 }
 
 function openInEditor(path) {
-  WM.open('editor');
+  WM.open('code');
   setTimeout(() => {
-    if (window.Editor && window.Editor.openFile) window.Editor.openFile(path);
-  }, 80);
+    if (window.Code && window.Code.openFile) window.Code.openFile(path);
+  }, 120);
 }
 
 /* Context menu */
