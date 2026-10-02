@@ -1,0 +1,13 @@
+{
+  "name": "flowos",
+  "version": "4.0.0",
+  "description": "Web OS para Termux — programe do celular",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  },
+  "license": "MIT"
+}
